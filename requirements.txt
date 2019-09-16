@@ -1,0 +1,5 @@
+pandas
+pymc3
+statsmodels
+matplotlib
+theano
