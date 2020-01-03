@@ -23,15 +23,19 @@ Desc:
 ### Change folder to project directory
 
 from os import chdir, listdir
-proj_folder: str = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+proj_folder: str
+# proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
 chdir(proj_folder)
 
 import os.path
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 import datetime as dt
 from zipfile import ZipFile, is_zipfile
-
+sns.set()
 #-- Set a few pandas options
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_columns', 1000)
@@ -183,14 +187,70 @@ start_dt = xmas_day - dt.timedelta(days=N_DAYS)
 dt_idx = pd.date_range(start=start_dt, end=xmas_day - dt.timedelta(1))
 
 
+### Freq counts of days back
+df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
+
+
+#-- What is the family member distribution?
+people_freq = df['n_people'].value_counts().astype(int)
+
+def plot_n_people():
+    people_freq_df = people_freq.reset_index()
+    fig, _ = plt.subplots()
+    ax = sns.scatterplot(x='index', y='n_people', data=people_freq_df)
+    ax.set_xlabel('N Members')
+    ax.set_ylabel('Count')
+    ax.set_title('Family Member Count Plot')
+    ax.grid(True)
+    plt.show()
+
+
+## Cost optimization
+# https://towardsdatascience.com/scheduling-with-ease-cost-optimization-tutorial-for-python-c05a5910ee0d
+#-- Worst-case buffet and ride costs
+people_freq.apply(lambda x: x * dfp['santas_buffet'])
+people_freq.apply(lambda x: x * dfp['helicopter_ride'])
+
+
+
+#-- Who has the most family members?
+df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
+df8 = df8['choice_0'].value_counts().copy()
+
+
+
+
+
+
+
+
 ### Sample dataframe
 dfx = df.iloc[:10,:]
-dfx.sort_values(by='choice_0', ascending=False)
+# dfx.sort_values(by='choice_0', ascending=False)
 
-
-dfx[choice_cols].apply(lambda x: dfx['base_date'] - dt.timedelta(days=1)*x)
 
 
 dfx['base_date'] = xmas_day
+# Freq counts
+df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
+
+
 dfx['base_date'] - pd.to_timedelta(dfx['choice_0'], unit='D')
 dfx.apply(lambda x: x['base_date'] - pd.to_timedelta(x['choice_0'], unit='D'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
