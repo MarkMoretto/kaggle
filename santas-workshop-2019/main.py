@@ -223,7 +223,7 @@ df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
 #-- Apply aggregate functions to get count of families per day and total number
 #-- of people
 agg_dict = {'n_days': 'size', 'n_people': 'sum'}
-res = (df5.groupby(['choice','n_days', ])
+dfx = (df5.groupby(['choice','n_days', ])
        .agg(agg_dict)
        .rename(columns={'n_days':'day_ct','n_people':'tot_people',})
        .reset_index()
