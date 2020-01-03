@@ -24,8 +24,8 @@ Desc:
 
 from os import chdir, listdir
 proj_folder: str
-# proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
-proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
+proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+# proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
 chdir(proj_folder)
 
 import os.path
@@ -113,8 +113,16 @@ class DataImporter:
                         return pd.read_csv(csvf)
 
 #-- Instantiate DataImporter and create dataframe
+df: pd.DataFrame
 dimp = DataImporter(proj_folder)
 df = dimp.import_csv_to_df()
+# df = df.drop('family_id', axis=1)
+
+#-- Column not included in data set
+additional_col: str = 'otherwise'
+
+#-- Add additional column with default value of zero
+df.insert(df.shape[1]-1, additional_col, np.float32(0))
 
 choice_cols: list = [i for i in df.columns.values if 'choice' in i]
 
@@ -123,11 +131,11 @@ choice_cols: list = [i for i in df.columns.values if 'choice' in i]
 #-- Create penalty dataframe to help crunch numbers
 
 penalty_df_index: list = choice_cols.copy()
-penalty_df_index.append('otherwise')
+penalty_df_index.append(additional_col)
 
 #-- Base prices for santa's buffet and helicopter ride
-base_buffet_price: float = 36.0
-base_ride_price: float = 398.0
+base_buffet_price: np.float32 = 36.0
+base_ride_price: np.float32 = 398.0
 
 ddict: dict = {
     'gift_card': [
@@ -156,7 +164,7 @@ ddict: dict = {
             base_buffet_price,
             base_buffet_price,
             ],
-    'helicopter_ride': [
+    'copter_ride': [
             0.,
             0.,
             0.,
@@ -178,17 +186,93 @@ dfp: pd.DataFrame = pd.DataFrame(
         )
 
 
-N_DAYS: np.int32 = 100
-MIN_OCCUPANCY: np.int32 = 125
-MAX_OCCUPANCY: np.int32 = 300
+N_DAYS: np.float16 = 100.
+MIN_OCCUPANCY: np.float16 = 125.
+MAX_OCCUPANCY: np.float16 = 300.
+DAY_RANGE: np.array = np.arange(1, N_DAYS + 1)
+
+##################################
+### Create occupancy dataframe ###
+# np.linalg.multi_dot()
+
+df_occ: pd.DataFrame = pd.DataFrame(index=DAY_RANGE)
+df_occ['tot_people'] = np.float32(0)
+df_occ['min_cap'] = np.float16(MIN_OCCUPANCY)
+df_occ['max_cap'] = np.float16(MAX_OCCUPANCY)
+df_occ['is_full'] = False
+
+
+
+# n_people
+freq_index_cols: list = choice_cols.copy()
+freq_index_cols.append('n_people')
+df_stack = df[freq_index_cols].stack().reset_index().rename(columns={'level_0':'family_id',0:'days_back_ct','level_1':'choice'})
+df_stack[['choice','days_back_ct']].groupby(['choice','days_back_ct']).size()
+
+#-- Create dataframes for family_id and number of people
+#-- and choice columns stacked
+df3 = df.loc[:, ['family_id','n_people',]].copy()
+df4 = df[choice_cols].stack().reset_index()
+
+#-- Merge dataframes to create a column of n_people
+#-- Drop columns and reformat for readability
+df5 = df4.merge(df3, how='left', left_on='level_0', right_on='family_id')
+df5 = df5.drop(['level_0', 'family_id'], axis=1)
+df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
+
+#-- Apply aggregate functions to get count of families per day and total number
+#-- of people
+agg_dict = {'n_days': 'size', 'n_people': 'sum'}
+res = (df5.groupby(['choice','n_days', ])
+       .agg(agg_dict)
+       .rename(columns={'n_days':'day_ct','n_people':'tot_people',})
+       .reset_index()
+       )
+
+
+# Count checks
+df4[df4['level_1'] == 'choice_0'][0].value_counts()
+
+
+
+#-- Who has the most family members?
+df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
+df8 = df8['choice_0'].value_counts()
+
+
+
+
+dfp[['santas_buffet','copter_ride']] * df.loc[0, 'n_people']
+
+df.loc[0].apply(lambda x: dfp['gift_card'] + (x['n_people'] * dfp['santas_buffet']) + (x['n_people'] * dfp['copter_ride']))
 
 ### Datetime index
 start_dt = xmas_day - dt.timedelta(days=N_DAYS)
 dt_idx = pd.date_range(start=start_dt, end=xmas_day - dt.timedelta(1))
 
 
-### Freq counts of days back
-df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
+# ### Freq counts of days back
+# df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
+
+xyz = df[choice_cols].groupby(choice_cols).size()
+abc = xyz.reset_index()
+abc = abc.drop(0, axis=1)
+
+xyz = df.groupby(choice_cols).size()
+
+
+
+(df['choice_0']
+    .value_counts()
+    .reset_index()
+    .rename(columns={'index':'n_days'})
+    .sort_values(by='n_days')
+    )
+
+
+
+
+df.loc[0]
 
 
 #-- What is the family member distribution?
@@ -203,13 +287,14 @@ def plot_n_people():
     ax.set_title('Family Member Count Plot')
     ax.grid(True)
     plt.show()
+# plot_n_people()
 
 
 ## Cost optimization
 # https://towardsdatascience.com/scheduling-with-ease-cost-optimization-tutorial-for-python-c05a5910ee0d
 #-- Worst-case buffet and ride costs
 people_freq.apply(lambda x: x * dfp['santas_buffet'])
-people_freq.apply(lambda x: x * dfp['helicopter_ride'])
+people_freq.apply(lambda x: x * dfp['copter_ride'])
 
 
 
@@ -218,7 +303,14 @@ df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
 df8 = df8['choice_0'].value_counts().copy()
 
 
+df2 = pd.DataFrame(
+        {'c':[1,1,2,2,3,3],
+         'L0':['a','a','b','c','d','e'],
+         'L1':['a','b','c','e','f','e']}
+        )
 
+pd.crosstab(df2['c'], df2['L0'])
+pd.crosstab(df2['c'], df2['L1'])
 
 
 
