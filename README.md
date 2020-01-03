@@ -1,5 +1,7 @@
-# This is a repo to hold various Kaggle `competitions`
+## Kaggle competition folders and work
 
-Mostly, these files will be exercises/examples and not official submissions for Kaggle competitions.
-
-I will try to keep a requirements file of any unusual libraries, where possible.
+No unusual libraries need to be installed outside of the general Data Science standards for Python:
+* pandas
+* numpy
+* sklearn
+* statsmodels
