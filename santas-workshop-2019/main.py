@@ -24,8 +24,8 @@ Desc:
 
 from os import chdir, listdir
 proj_folder: str
-proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
-# proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
+# proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
 chdir(proj_folder)
 
 import os.path
@@ -117,6 +117,7 @@ df: pd.DataFrame
 dimp = DataImporter(proj_folder)
 df = dimp.import_csv_to_df()
 # df = df.drop('family_id', axis=1)
+df['family_id'] = df['family_id'].astype(str)
 
 #-- Column not included in data set
 additional_col: str = 'otherwise'
@@ -191,23 +192,13 @@ MIN_OCCUPANCY: np.float16 = 125.
 MAX_OCCUPANCY: np.float16 = 300.
 DAY_RANGE: np.array = np.arange(1, N_DAYS + 1)
 
-##################################
-### Create occupancy dataframe ###
-# np.linalg.multi_dot()
-
-df_occ: pd.DataFrame = pd.DataFrame(index=DAY_RANGE)
-df_occ['tot_people'] = np.float32(0)
-df_occ['min_cap'] = np.float16(MIN_OCCUPANCY)
-df_occ['max_cap'] = np.float16(MAX_OCCUPANCY)
-df_occ['is_full'] = False
-
 
 
 # n_people
 freq_index_cols: list = choice_cols.copy()
 freq_index_cols.append('n_people')
-df_stack = df[freq_index_cols].stack().reset_index().rename(columns={'level_0':'family_id',0:'days_back_ct','level_1':'choice'})
-df_stack[['choice','days_back_ct']].groupby(['choice','days_back_ct']).size()
+# df_stack = df[freq_index_cols].stack().reset_index().rename(columns={'level_0':'family_id',0:'days_back_ct','level_1':'choice'})
+# df_stack[['choice','days_back_ct']].groupby(['choice','days_back_ct']).size()
 
 #-- Create dataframes for family_id and number of people
 #-- and choice columns stacked
@@ -220,18 +211,85 @@ df5 = df4.merge(df3, how='left', left_on='level_0', right_on='family_id')
 df5 = df5.drop(['level_0', 'family_id'], axis=1)
 df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
 
+del df3, df4
+
 #-- Apply aggregate functions to get count of families per day and total number
 #-- of people
 agg_dict = {'n_days': 'size', 'n_people': 'sum'}
-dfx = (df5.groupby(['choice','n_days', ])
+dfx = (df5.groupby(['choice','n_days', 'n_people'])
        .agg(agg_dict)
        .rename(columns={'n_days':'day_ct','n_people':'tot_people',})
        .reset_index()
        )
+dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','n_days',])
 
 
-# Count checks
-df4[df4['level_1'] == 'choice_0'][0].value_counts()
+
+
+#-- Sample and apply some costs
+df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
+
+df3.apply(lambda x, choice='choice_0': \
+          dfp.loc[choice, 'gift_card'] + \
+          (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
+          (x['n_people'] * dfp.loc[choice, 'copter_ride'])
+          , axis=1)
+
+
+
+
+
+
+##################################
+### Create occupancy dataframe ###
+# np.linalg.multi_dot()
+
+# df_occ: pd.DataFrame = pd.DataFrame(index=DAY_RANGE)
+# df_occ['family_id'] = np.float32(0)
+# df_occ['assigned_day'] = np.float32(0)
+# df_occ['n_people'] = np.float32(0)
+# df_occ['tot_people'] = np.float32(0)
+# # df_occ['min_cap'] = np.float16(MIN_OCCUPANCY)
+# # df_occ['max_cap'] = np.float16(MAX_OCCUPANCY)
+# df_occ['is_full'] = False
+
+final_df = df['family_id']
+final_df = final_df.to_frame('family_id')
+final_df['assigned_day'] = np.float32(0.)
+
+
+
+
+df_x = df.sort_values(by='n_people', ascending=False).sort_values()
+n_people_lst: list = list(set(df['n_people']))
+day_total = 0.
+for d in DAY_RANGE: # (1, 100)
+    for n in n_people_lst:
+        for f in df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == 1)), ['family_id','n_people']]:
+            day_total += df_x.loc
+
+
+
+
+
+
+df6 = df_x.loc[((df_x['n_people'] == 8)&(df_x['choice_0'] == 1)), ['family_id','n_people']]
+
+
+df6['n_people'].cumsum()
+n_people_lst: list = list(set(df['n_people']))
+
+for n in n_people_lst:
+    for i in DAY_RANGE:
+        tmp_df = df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == i)), ['family_id','n_people']]
+        ppl_ct = tmp_df['n_people'].sum()
+
+df_x[df_x['choice_0'] == 1]
+
+
+
+
+
 
 
 
