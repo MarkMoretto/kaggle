@@ -119,13 +119,27 @@ df = dimp.import_csv_to_df()
 # df = df.drop('family_id', axis=1)
 df['family_id'] = df['family_id'].astype(str)
 
-#-- Column not included in data set
-additional_col: str = 'otherwise'
+# #-- Column not included in data set
+# additional_col: str = 'otherwise'
 
-#-- Add additional column with default value of zero
-df.insert(df.shape[1]-1, additional_col, np.float32(0))
+# #-- Add additional column with default value of zero
+# df.insert(df.shape[1]-1, additional_col, np.float32(0))
 
 choice_cols: list = [i for i in df.columns.values if 'choice' in i]
+n_choice_cols: np.array = np.arange(len(choice_cols), dtype=np.int8)
+choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
+
+### Add column that sums each day choice
+# Multiply by choice_weights array, sum the columns, multiple by n_people
+df['choice_bias'] = (df[choice_cols].multiply(choice_weights).sum(axis=1) * df['n_people'])
+# df.drop('choice_bias', axis=1, inplace=True)
+
+
+df = df.sort_values(by=choice_cols)
+df.iloc[:50,:].sort_values(by=['n_people','choice_sum'], ascending=[False, True],)
+
+
+### Sum
 
 
 ### Evaluation ###
