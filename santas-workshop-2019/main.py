@@ -24,8 +24,8 @@ Desc:
 
 from os import chdir, listdir
 proj_folder: str
-# proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
-proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
+proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+# proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
 chdir(proj_folder)
 
 import os.path
@@ -127,19 +127,38 @@ df['family_id'] = df['family_id'].astype(str)
 
 choice_cols: list = [i for i in df.columns.values if 'choice' in i]
 n_choice_cols: np.array = np.arange(len(choice_cols), dtype=np.int8)
-ulam_seq = [1, 2, 3, 4, 6, 8, 11, 13, 16, 18]
-fibonacci_seq: list = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55,]
-# choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
-choice_weights: np.array = np.array(ulam_seq, dtype=np.int16)[::-1]
+def weights_misc():
+    ulam_seq = [1, 2, 3, 4, 6, 8, 11, 13, 16, 18]
+    # choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
+    choice_weights: np.array = np.array(ulam_seq, dtype=np.int16)[::-1]
+    col_count_seq: np.array = np.array([i for i in range(1, len(choice_cols) + 1)], dtype=np.uint8)
+
+col_count_seq: np.array = np.array([i for i in range(1, len(choice_cols) + 1)], dtype=np.uint16)
+col_count_inv: np.array = col_count_seq[::-1]
+choice_weights: np.array = np.array([40, 25, 16, 11, 7, 4, 2, 1, 1, 1,])
+# np.diff(choice_weights[::-1])
+
+#-- Adjusted n_people counts
+n_ppl_freq_adj: pd.Series = (1 / df['n_people'].value_counts()) * 2000
+n_ppl_freq_adj = n_ppl_freq_adj.astype(int)
+
+
 
 ### Add column that sums each day choice
 # Multiply by choice_weights array, sum the columns, multiple by n_people
-df['choice_bias'] = (df[choice_cols].multiply(choice_weights).sum(axis=1) * df['n_people'])
+choice_col_name: str = 'choice_bias'
+df[choice_col_name] = (df[choice_cols].multiply(choice_weights).sum(axis=1) * df['n_people'].map(n_ppl_freq_adj))
+df[choice_col_name] = round(df[choice_col_name].astype(np.float32), 2)
 # df.drop('choice_bias', axis=1, inplace=True)
+# df['choice_bias'].nunique()
 
+sort_cols: list = ['n_people']
+sort_cols.extend(choice_cols)
+sort_cols.extend([choice_col_name])
+sort_bool: list = [False if i.endswith(('people','bias',)) else True for i in sort_cols]
+df = df.sort_values(by=sort_cols, ascending = sort_bool)
 
-df = df.sort_values(by=choice_cols)
-df.iloc[:50,:].sort_values(by=['n_people','choice_sum'], ascending=[False, True],)
+df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True],)
 
 
 ### Sum
@@ -204,9 +223,9 @@ dfp: pd.DataFrame = pd.DataFrame(
         )
 
 
-N_DAYS: np.float16 = 100.
-MIN_OCCUPANCY: np.float16 = 125.
-MAX_OCCUPANCY: np.float16 = 300.
+N_DAYS: np.uint8 = 100
+MIN_OCCUPANCY: np.uint8 = 125
+MAX_OCCUPANCY: np.uint8 = 300
 DAY_RANGE: np.array = np.arange(1, N_DAYS + 1)
 
 
@@ -245,13 +264,13 @@ dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','
 
 
 # #-- Sample and apply some costs
-# df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
+df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
 
-# df3.apply(lambda x, choice='choice_0': \
-#           dfp.loc[choice, 'gift_card'] + \
-#           (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
-#           (x['n_people'] * dfp.loc[choice, 'copter_ride'])
-#           , axis=1)
+df3.apply(lambda x, choice='choice_0': \
+          dfp.loc[choice, 'gift_card'] + \
+          (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
+          (x['n_people'] * dfp.loc[choice, 'copter_ride'])
+          , axis=1)
 
 
 
@@ -273,36 +292,55 @@ dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','
 
 final_df = df['family_id']
 final_df = final_df.to_frame('family_id')
-final_df['assigned_day'] = np.int32(0)
+final_df['assigned_day'] = 0
+
+
+# df_x = df.sort_values(by='n_people', ascending=False).sort_values()
+n_people_lst: list = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
+tmp_df: pd.DataFrame
+
+tst_df = df.copy()
+tst_df = tst_df.sort_values(by=sort_cols, ascending = sort_bool)
+
+for c in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
+    for d in DAY_RANGE: # (1, 100)
+        day_total = 0
+        for n in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
+            tmp_df = tst_df.loc[((tst_df['n_people'] == n)&(tst_df[c] == d)), ['family_id','n_people']].copy()
+            tmp_df = tmp_df.sort_values(by=sort_cols, ascending = sort_bool)
+            print(f"tmp_df shape: {tmp_df.shape}")
+            print(f"Column: {c}\tDay: {d}\tn_people: {n}")
+            for i in tmp_df.index:
+                if day_total >= MAX_OCCUPANCY or day_total <= MAX_OCCUPANCY:
+                    final_df.loc[i,'assigned_day'] = d
+                    day_total += tst_df.loc[i, 'n_people']
+                    tst_df.drop(i, inplace=True)
+
+
+final_df['assigned_day'].value_counts()
 
 
 
 
-df_x = df.sort_values(by='n_people', ascending=False).sort_values()
-n_people_lst: list = list(set(df['n_people']))
-day_total = 0
-for d in DAY_RANGE: # (1, 100)
-    for n in n_people_lst:
-        for f in df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == 1)), ['family_id','n_people']]:
-            day_total += df_x.loc
 
-
-
-
-
-
-df6 = df_x.loc[((df_x['n_people'] == 8)&(df_x['choice_0'] == 1)), ['family_id','n_people']]
+df6 = df.loc[((df['n_people'] == 8)&(df['choice_0'] == 1)), ['family_id','n_people']]
 
 
 df6['n_people'].cumsum()
-n_people_lst: list = list(set(df['n_people']))
 
-for n in n_people_lst:
-    for i in DAY_RANGE:
-        tmp_df = df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == i)), ['family_id','n_people']]
-        ppl_ct = tmp_df['n_people'].sum()
+day_total = 0
+included_families: list = list()
+for i in df6.index:
+    if day_total >= MAX_OCCUPANCY or day_total <= MAX_OCCUPANCY:
+        day_total += df6.loc[i, 'n_people']
+        included_families.extend([i])
 
-df_x[df_x['choice_0'] == 1]
+# for n in n_people_lst:
+#     for i in DAY_RANGE:
+#         tmp_df = df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == i)), ['family_id','n_people']]
+#         ppl_ct = tmp_df['n_people'].sum()
+
+# df_x[df_x['choice_0'] == 1]
 
 
 
