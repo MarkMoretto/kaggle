@@ -43,12 +43,12 @@ pd.set_option('mode.chained_assignment', None) # Silence `SettingWithCopyWarning
 
 
 
-xmas_day: dt.datetime.date = dt.datetime(year=2019, month=12, day=25).date()
-today: dt.datetime.date = dt.datetime.today().date()
+# xmas_day: dt.datetime.date = dt.datetime(year=2019, month=12, day=25).date()
+# today: dt.datetime.date = dt.datetime.today().date()
 
-def days_between(dt1: dt.datetime.date, dt2: dt.datetime.date) -> np.int32:
-    """Find net days between two dates."""
-    return np.abs((dt1 - dt2).days)
+# def days_between(dt1: dt.datetime.date, dt2: dt.datetime.date) -> np.int32:
+#     """Find net days between two dates."""
+#     return np.abs((dt1 - dt2).days)
 
 
 class DataImporter:
