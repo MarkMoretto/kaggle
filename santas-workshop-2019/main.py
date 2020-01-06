@@ -127,7 +127,10 @@ df['family_id'] = df['family_id'].astype(str)
 
 choice_cols: list = [i for i in df.columns.values if 'choice' in i]
 n_choice_cols: np.array = np.arange(len(choice_cols), dtype=np.int8)
-choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
+ulam_seq = [1, 2, 3, 4, 6, 8, 11, 13, 16, 18]
+fibonacci_seq: list = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55,]
+# choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
+choice_weights: np.array = np.array(ulam_seq, dtype=np.int16)[::-1]
 
 ### Add column that sums each day choice
 # Multiply by choice_weights array, sum the columns, multiple by n_people
@@ -146,7 +149,7 @@ df.iloc[:50,:].sort_values(by=['n_people','choice_sum'], ascending=[False, True]
 #-- Create penalty dataframe to help crunch numbers
 
 penalty_df_index: list = choice_cols.copy()
-penalty_df_index.append(additional_col)
+# penalty_df_index.append(additional_col)
 
 #-- Base prices for santa's buffet and helicopter ride
 base_buffet_price: np.float32 = 36.0
@@ -164,7 +167,7 @@ ddict: dict = {
             300.,
             400.,
             500.,
-            500.,
+            # 500.,
             ],
     'santas_buffet': [
             0.,
@@ -177,7 +180,7 @@ ddict: dict = {
             base_buffet_price,
             base_buffet_price,
             base_buffet_price,
-            base_buffet_price,
+            # base_buffet_price,
             ],
     'copter_ride': [
             0.,
@@ -190,7 +193,7 @@ ddict: dict = {
             0.,
             0.,
             base_ride_price*0.5,
-            base_ride_price,
+            # base_ride_price,
             ],
     }
 
@@ -218,6 +221,7 @@ freq_index_cols.append('n_people')
 #-- and choice columns stacked
 df3 = df.loc[:, ['family_id','n_people',]].copy()
 df4 = df[choice_cols].stack().reset_index()
+df4['level_0'] = df4['level_0'].astype(str) # Update level_0 col to str for join
 
 #-- Merge dataframes to create a column of n_people
 #-- Drop columns and reformat for readability
@@ -240,14 +244,14 @@ dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','
 
 
 
-#-- Sample and apply some costs
-df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
+# #-- Sample and apply some costs
+# df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
 
-df3.apply(lambda x, choice='choice_0': \
-          dfp.loc[choice, 'gift_card'] + \
-          (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
-          (x['n_people'] * dfp.loc[choice, 'copter_ride'])
-          , axis=1)
+# df3.apply(lambda x, choice='choice_0': \
+#           dfp.loc[choice, 'gift_card'] + \
+#           (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
+#           (x['n_people'] * dfp.loc[choice, 'copter_ride'])
+#           , axis=1)
 
 
 
@@ -269,14 +273,14 @@ df3.apply(lambda x, choice='choice_0': \
 
 final_df = df['family_id']
 final_df = final_df.to_frame('family_id')
-final_df['assigned_day'] = np.float32(0.)
+final_df['assigned_day'] = np.int32(0)
 
 
 
 
 df_x = df.sort_values(by='n_people', ascending=False).sort_values()
 n_people_lst: list = list(set(df['n_people']))
-day_total = 0.
+day_total = 0
 for d in DAY_RANGE: # (1, 100)
     for n in n_people_lst:
         for f in df_x.loc[((df_x['n_people'] == n)&(df_x['choice_0'] == 1)), ['family_id','n_people']]:
