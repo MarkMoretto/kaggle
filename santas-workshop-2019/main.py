@@ -248,92 +248,200 @@ df5 = df4.merge(df3, how='left', left_on='level_0', right_on='family_id')
 df5 = df5.drop(['level_0', 'family_id'], axis=1)
 df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
 
-del df3, df4
-
-#-- Apply aggregate functions to get count of families per day and total number
-#-- of people
-agg_dict = {'n_days': 'size', 'n_people': 'sum'}
-dfx = (df5.groupby(['choice','n_days', 'n_people'])
-       .agg(agg_dict)
-       .rename(columns={'n_days':'day_ct','n_people':'tot_people',})
-       .reset_index()
-       )
-dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','n_days',])
-
-
-
-
-# #-- Sample and apply some costs
-df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
-
-df3.apply(lambda x, choice='choice_0': \
-          dfp.loc[choice, 'gift_card'] + \
-          (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
-          (x['n_people'] * dfp.loc[choice, 'copter_ride'])
-          , axis=1)
-
+del df3
 
 
 
 
 
 ##################################
-### Create occupancy dataframe ###
-# np.linalg.multi_dot()
+### Assignment Process ###
 
-# df_occ: pd.DataFrame = pd.DataFrame(index=DAY_RANGE)
-# df_occ['family_id'] = np.float32(0)
-# df_occ['assigned_day'] = np.float32(0)
-# df_occ['n_people'] = np.float32(0)
-# df_occ['tot_people'] = np.float32(0)
-# # df_occ['min_cap'] = np.float16(MIN_OCCUPANCY)
-# # df_occ['max_cap'] = np.float16(MAX_OCCUPANCY)
-# df_occ['is_full'] = False
+n_people_lst = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
 
+#-- Final dataframe to hold assigned day
 final_df = df['family_id']
 final_df = final_df.to_frame('family_id')
 final_df['assigned_day'] = 0
+final_df['n_people'] = 0
 
 
-# df_x = df.sort_values(by='n_people', ascending=False).sort_values()
-n_people_lst: list = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
-tmp_df: pd.DataFrame
+df_ = df.copy()
+for i in df_.select_dtypes(include=['int32','int64']):
+    df_[i] = df_[i].astype(np.float32)
 
-tst_df = df.copy()
-tst_df = tst_df.sort_values(by=sort_cols, ascending = sort_bool)
-
-for c in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
-    for d in DAY_RANGE: # (1, 100)
-        day_total = 0
-        for n in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
-            tmp_df = tst_df.loc[((tst_df['n_people'] == n)&(tst_df[c] == d)), ['family_id','n_people']].copy()
-            tmp_df = tmp_df.sort_values(by=sort_cols, ascending = sort_bool)
-            print(f"tmp_df shape: {tmp_df.shape}")
-            print(f"Column: {c}\tDay: {d}\tn_people: {n}")
-            for i in tmp_df.index:
-                if day_total >= MAX_OCCUPANCY or day_total <= MAX_OCCUPANCY:
-                    final_df.loc[i,'assigned_day'] = d
-                    day_total += tst_df.loc[i, 'n_people']
-                    tst_df.drop(i, inplace=True)
-
-
-final_df['assigned_day'].value_counts()
-
-
+#-- Choice first approach
+for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
+    for n in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
+        df_1 = df_[df_['n_people'] == n].copy()
+        df_1 = df_1.sort_values(by=[cc,'choice_bias'], ascending=[True, False])
+        # print(f"df_1 shape: {df_1.shape}\tn_people: {n}")
+        for d in DAY_RANGE: # (1, 100)
+            tst_df = df_1.loc[df_1[cc] == d, :].copy()
+            print(f"tst_df shape: {tst_df.shape}")
+            print(f"Column: {cc}\n\tDay: {d}\n\tn_people: {n}")
+            if tst_df.shape[0] > 0:
+                for i in tst_df.index:
+                    day_total = final_df[final_df['assigned_day'] == d]['n_people'].sum()
+                    # print(f"day total: {day_total}")
+                    if (day_total + n) <= MAX_OCCUPANCY:
+                        final_df.loc[i,'assigned_day'] = d
+                        final_df.loc[i,'n_people'] = tst_df.loc[i, 'n_people']
+                        df_ = df_.drop(i, inplace=False)
 
 
 
-df6 = df.loc[((df['n_people'] == 8)&(df['choice_0'] == 1)), ['family_id','n_people']]
+#-- Check and update any unassigned families
+n_people_missing = df.loc[final_df.loc[final_df['assigned_day'] == 0, 'family_id'].astype(int)]['n_people']
+final_df.loc[final_df['assigned_day'] == 0, 'n_people'] = n_people_missing.loc[final_df[final_df['assigned_day'] == 0].index]
 
 
-df6['n_people'].cumsum()
 
-day_total = 0
-included_families: list = list()
-for i in df6.index:
-    if day_total >= MAX_OCCUPANCY or day_total <= MAX_OCCUPANCY:
-        day_total += df6.loc[i, 'n_people']
-        included_families.extend([i])
+###-- Main df metrics for n_people
+dfx = (df['n_people']
+    .to_frame()
+    .groupby('n_people')
+    .size()
+    .to_frame()
+    .reset_index()
+    .rename(columns={'n_people':'groups', 0:'n_people',})
+    )
+
+dfx['tot_people'] = dfx['groups'] * dfx['n_people']
+dfx['cumul_tot_people'] = dfx['tot_people'].cumsum()
+
+# #-- Validate with n_people count
+# df[df['n_people'] == 8]['n_people'].count()
+
+###-- Final_df metrics
+final_dfx = final_df.sort_values(by=['assigned_day', 'n_people','family_id'], ascending=[True, False, True])
+
+#-- Main agg
+
+final_dfx_2 = (
+        final_dfx.loc[: ,['assigned_day','n_people']]
+        .groupby(['assigned_day','n_people'])
+        .size()
+        .reset_index()
+        .rename(columns={0:'family_ct',})
+        )
+
+final_dfx_2['cum_tot'] = final_dfx_2['n_people'] * final_dfx_2['family_ct']
+# final_dfx_2.sort_values(by=['assigned_day','n_people',], ascending=[True, True]).head(15)
+
+# #-- Count for day 1
+# final_dfx_2[final_dfx_2['assigned_day'] == 1]
+
+###-- Total pepole per day
+final_dfx_res = final_dfx_2.loc[: ,['assigned_day','cum_tot']].groupby(['assigned_day']).sum()
+
+
+# #-- final_dfx_2 day 1 result
+# final_dfx_2[final_dfx_2['assigned_day'] == 1]['cum_tot'].sum()
+
+
+
+###TODO: Determine choice of day for each family
+df_stack = df4.rename(columns={'level_0':'family_id','level_1':'choice_n', 0:'day_number',}).copy()
+
+cost_df = final_df.merge(df_stack, how='left', left_on=['family_id', 'assigned_day'], right_on=['family_id', 'day_number'])
+cost_df = cost_df.drop('day_number', axis=1)
+cost_df['cost'] = np.float32(0)
+
+cost_df.loc[cost_df['assigned_day'] == 0, 'choice_n'] = 'choice_9'
+
+for cc in choice_cols:
+    cost_df.loc[cost_df['choice_n'] == cc, 'cost'] = cost_df.loc[cost_df['choice_n'] == cc, :].apply(lambda x: dfp.loc[cc, 'gift_card'] \
+                   + (x['n_people'] * dfp.loc[cc, 'santas_buffet']) \
+                   + (x['n_people'] * dfp.loc[cc, 'copter_ride']), axis=1)
+
+
+total_cost = '${:,.2f}'.format(cost_df['cost'].sum())
+
+
+
+
+### Find days below 125, reallocate families, if possible
+df_missed = final_dfx_res[final_dfx_res['cum_tot'] < MIN_OCCUPANCY].reset_index()
+
+#-- Sampling families with assigned_day of 0.
+df6 = df_[df_['family_id'].isin(cost_df.loc[cost_df['assigned_day'] == 0]['family_id'])]
+
+
+df7 = (
+       df6.stack()
+       .reset_index()
+       .rename(columns = {'level_0':'family_id', 'level_1':'attrs', 0:'values',})
+       )
+
+del df6
+
+# df7.loc[df7['attrs'].isin(choice_cols)]]['family_id','attrs',]
+tmp_df = df7.loc[df7['attrs'] == 'n_people', ['family_id','values']]
+df7 = df7.merge(tmp_df, how='left', left_on='family_id', right_on='family_id')
+df7 = df7.rename(columns={'attrs':'choices', 'values_x':'days','values_y':'n_people',})
+df7 = df7[~df7['choices'].str.contains('n_people|family_id|choice_bias', case=True, regex=True)]
+
+
+for i in df_missed['assigned_day']:
+    tmp_df = df7.loc[df7['days'] == d].copy()
+    if tmp_df.shape[0] > 0:
+        print(f"Match found for day: {i}\n\tTemp df shape is: {tmp_df.shape}\n")
+
+
+
+
+
+
+
+
+# choice_col = 'choice_8'
+# tst_df = cost_df.loc[cost_df['choice_n'] == choice_col, :]
+
+# cost_df.loc[cost_df['choice_n'] == choice_col, :].apply(lambda x: dfp.loc[choice_col, 'gift_card'] \
+#        + (x['n_people'] * dfp.loc[choice_col, 'santas_buffet']) \
+#        + (x['n_people'] * dfp.loc[choice_col, 'copter_ride']), axis=1)
+
+
+# tst_df['cost'] = tst_df.apply(lambda x, choice=choice_col: dfp.loc[choice, 'gift_card'] + \
+#           (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
+#           (x['n_people'] * dfp.loc[choice, 'copter_ride'])
+#           , axis=1)
+
+# # #-- Sample and apply some costs
+# df3 = dfx[((dfx['n_people'] == 8) & (dfx['choice'] == 'choice_1'))].copy()
+
+# df3.apply(lambda x, choice='choice_0': \
+#           dfp.loc[choice, 'gift_card'] + \
+#           (x['n_people'] * dfp.loc[choice, 'santas_buffet']) + \
+#           (x['n_people'] * dfp.loc[choice, 'copter_ride'])
+#           , axis=1)
+
+
+
+
+
+# #-- Apply aggregate functions to get count of families per day and total number
+# #-- of people
+# agg_dict = {'n_days': 'size', 'n_people': 'sum'}
+# dfx = (df5.groupby(['choice','n_days', 'n_people'])
+#        .agg(agg_dict)
+#        .rename(columns={'n_days':'day_ct','n_people':'tot_people',})
+#        .reset_index()
+#        )
+# dfx = dfx.sort_values(by='n_people', ascending=False).sort_values(by=['choice','n_days',])
+
+# df6 = df.loc[((df['n_people'] == 8)&(df['choice_0'] == 1)), ['family_id','n_people']]
+
+
+# df6['n_people'].cumsum()
+
+# day_total = 0
+# included_families: list = list()
+# for i in df6.index:
+#     if day_total >= MAX_OCCUPANCY or day_total <= MAX_OCCUPANCY:
+#         day_total += df6.loc[i, 'n_people']
+#         included_families.extend([i])
 
 # for n in n_people_lst:
 #     for i in DAY_RANGE:
@@ -349,44 +457,44 @@ for i in df6.index:
 
 
 
-#-- Who has the most family members?
-df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
-df8 = df8['choice_0'].value_counts()
+# #-- Who has the most family members?
+# df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
+# df8 = df8['choice_0'].value_counts()
 
 
 
 
-dfp[['santas_buffet','copter_ride']] * df.loc[0, 'n_people']
+# dfp[['santas_buffet','copter_ride']] * df.loc[0, 'n_people']
 
-df.loc[0].apply(lambda x: dfp['gift_card'] + (x['n_people'] * dfp['santas_buffet']) + (x['n_people'] * dfp['copter_ride']))
+# df.loc[0].apply(lambda x: dfp['gift_card'] + (x['n_people'] * dfp['santas_buffet']) + (x['n_people'] * dfp['copter_ride']))
 
-### Datetime index
-start_dt = xmas_day - dt.timedelta(days=N_DAYS)
-dt_idx = pd.date_range(start=start_dt, end=xmas_day - dt.timedelta(1))
-
-
-# ### Freq counts of days back
-# df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
-
-xyz = df[choice_cols].groupby(choice_cols).size()
-abc = xyz.reset_index()
-abc = abc.drop(0, axis=1)
-
-xyz = df.groupby(choice_cols).size()
+# ### Datetime index
+# start_dt = xmas_day - dt.timedelta(days=N_DAYS)
+# dt_idx = pd.date_range(start=start_dt, end=xmas_day - dt.timedelta(1))
 
 
+# # ### Freq counts of days back
+# # df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
 
-(df['choice_0']
-    .value_counts()
-    .reset_index()
-    .rename(columns={'index':'n_days'})
-    .sort_values(by='n_days')
-    )
+# xyz = df[choice_cols].groupby(choice_cols).size()
+# abc = xyz.reset_index()
+# abc = abc.drop(0, axis=1)
+
+# xyz = df.groupby(choice_cols).size()
 
 
 
+# (df['choice_0']
+#     .value_counts()
+#     .reset_index()
+#     .rename(columns={'index':'n_days'})
+#     .sort_values(by='n_days')
+#     )
 
-df.loc[0]
+
+
+
+# df.loc[0]
 
 
 #-- What is the family member distribution?
@@ -404,45 +512,45 @@ def plot_n_people():
 # plot_n_people()
 
 
-## Cost optimization
-# https://towardsdatascience.com/scheduling-with-ease-cost-optimization-tutorial-for-python-c05a5910ee0d
-#-- Worst-case buffet and ride costs
-people_freq.apply(lambda x: x * dfp['santas_buffet'])
-people_freq.apply(lambda x: x * dfp['copter_ride'])
+# ## Cost optimization
+# # https://towardsdatascience.com/scheduling-with-ease-cost-optimization-tutorial-for-python-c05a5910ee0d
+# #-- Worst-case buffet and ride costs
+# people_freq.apply(lambda x: x * dfp['santas_buffet'])
+# people_freq.apply(lambda x: x * dfp['copter_ride'])
 
 
 
-#-- Who has the most family members?
-df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
-df8 = df8['choice_0'].value_counts().copy()
+# #-- Who has the most family members?
+# df8 = df[df['n_people'] == 8].sort_values(by='choice_0')
+# df8 = df8['choice_0'].value_counts().copy()
 
 
-df2 = pd.DataFrame(
-        {'c':[1,1,2,2,3,3],
-         'L0':['a','a','b','c','d','e'],
-         'L1':['a','b','c','e','f','e']}
-        )
+# df2 = pd.DataFrame(
+#         {'c':[1,1,2,2,3,3],
+#          'L0':['a','a','b','c','d','e'],
+#          'L1':['a','b','c','e','f','e']}
+#         )
 
-pd.crosstab(df2['c'], df2['L0'])
-pd.crosstab(df2['c'], df2['L1'])
-
-
-
-
-
-### Sample dataframe
-dfx = df.iloc[:10,:]
-# dfx.sort_values(by='choice_0', ascending=False)
+# pd.crosstab(df2['c'], df2['L0'])
+# pd.crosstab(df2['c'], df2['L1'])
 
 
 
-dfx['base_date'] = xmas_day
-# Freq counts
-df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
 
 
-dfx['base_date'] - pd.to_timedelta(dfx['choice_0'], unit='D')
-dfx.apply(lambda x: x['base_date'] - pd.to_timedelta(x['choice_0'], unit='D'))
+# ### Sample dataframe
+# dfx = df.iloc[:10,:]
+# # dfx.sort_values(by='choice_0', ascending=False)
+
+
+
+# dfx['base_date'] = xmas_day
+# # Freq counts
+# df[choice_cols].stack().reset_index(drop=True).value_counts().astype(int)
+
+
+# dfx['base_date'] - pd.to_timedelta(dfx['choice_0'], unit='D')
+# dfx.apply(lambda x: x['base_date'] - pd.to_timedelta(x['choice_0'], unit='D'))
 
 
 

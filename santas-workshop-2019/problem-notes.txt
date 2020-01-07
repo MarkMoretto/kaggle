@@ -1,0 +1,6 @@
+This could be a type of bin packing problem:
+
+https://en.wikipedia.org/wiki/Bin_packing_problem
+
+PySCIPOpt example:
+http://scip-interfaces.github.io/PySCIPOpt/docs/html/bpp_8py_source.html
