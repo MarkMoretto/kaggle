@@ -161,7 +161,7 @@ sort_cols.extend([choice_col_name])
 sort_bool = [False if i.endswith(('people','bias',)) else True for i in sort_cols]
 df = df.sort_values(by=sort_cols, ascending = sort_bool)
 
-df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True],)
+# df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True],)
 
 
 ### Sum
@@ -273,6 +273,18 @@ df_ = df.copy()
 for i in df_.select_dtypes(include=['int32','int64']):
     df_[i] = df_[i].astype(np.float32)
 
+
+
+### Try crosstab-like eval
+df1 = df_[['family_id','choice_1', 'n_people']]
+df1 = df1.sort_values(by=['choice_1','n_people'], ascending=[True, False])
+df_ch1 = df1.groupby(['choice_1', 'n_people'])['n_people'].sum().unstack().fillna(0).astype(int)
+# Validate
+# df1[((df1['n_people'] == 8) & (df1['choice_1'] == 1))]['n_people'].sum()
+
+
+
+
 #-- Choice first approach
 for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
     for n in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
@@ -291,6 +303,7 @@ for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
                         final_df.loc[i,'assigned_day'] = d
                         final_df.loc[i,'n_people'] = tst_df.loc[i, 'n_people']
                         df_ = df_.drop(i, inplace=False)
+
 
 
 
