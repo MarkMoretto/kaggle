@@ -18,12 +18,15 @@ Desc:
     n_people.
     
     Every family must be scheduled for one and only one assigned_day.
+
+
+Notes:
+    Bin packing? https://stackoverflow.com/questions/7392143/python-implementations-of-packing-algorithm
 """
 
 ### Change folder to project directory
 
 from os import chdir, listdir
-proj_folder: str
 proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
 # proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
 chdir(proj_folder)
@@ -152,10 +155,10 @@ df[choice_col_name] = round(df[choice_col_name].astype(np.float32), 2)
 # df.drop('choice_bias', axis=1, inplace=True)
 # df['choice_bias'].nunique()
 
-sort_cols: list = ['n_people']
+sort_cols = ['n_people']
 sort_cols.extend(choice_cols)
 sort_cols.extend([choice_col_name])
-sort_bool: list = [False if i.endswith(('people','bias',)) else True for i in sort_cols]
+sort_bool = [False if i.endswith(('people','bias',)) else True for i in sort_cols]
 df = df.sort_values(by=sort_cols, ascending = sort_bool)
 
 df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True],)
@@ -167,14 +170,14 @@ df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True
 ### Evaluation ###
 #-- Create penalty dataframe to help crunch numbers
 
-penalty_df_index: list = choice_cols.copy()
+penalty_df_index = choice_cols.copy()
 # penalty_df_index.append(additional_col)
 
 #-- Base prices for santa's buffet and helicopter ride
-base_buffet_price: np.float32 = 36.0
-base_ride_price: np.float32 = 398.0
+base_buffet_price = 36.0
+base_ride_price = 398.0
 
-ddict: dict = {
+ddict = {
     'gift_card': [
             0.,
             50.,
@@ -223,9 +226,9 @@ dfp: pd.DataFrame = pd.DataFrame(
         )
 
 
-N_DAYS: np.uint8 = 100
-MIN_OCCUPANCY: np.uint8 = 125
-MAX_OCCUPANCY: np.uint8 = 300
+N_DAYS = 100
+MIN_OCCUPANCY = 125
+MAX_OCCUPANCY = 300
 DAY_RANGE: np.array = np.arange(1, N_DAYS + 1)
 
 
