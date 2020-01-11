@@ -26,9 +26,13 @@ Notes:
 
 ### Change folder to project directory
 
+home = True
 from os import chdir, listdir
-proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
-# proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
+if home:
+    proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
+else:
+    proj_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\santas-workshop-2019"
+
 chdir(proj_folder)
 
 import os.path
@@ -279,6 +283,7 @@ for i in df_.select_dtypes(include=['int32','int64']):
 df1 = df_[['family_id','choice_1', 'n_people']]
 df1 = df1.sort_values(by=['choice_1','n_people'], ascending=[True, False])
 df_ch1 = df1.groupby(['choice_1', 'n_people'])['n_people'].sum().unstack().fillna(0).astype(int)
+
 # Validate
 # df1[((df1['n_people'] == 8) & (df1['choice_1'] == 1))]['n_people'].sum()
 
