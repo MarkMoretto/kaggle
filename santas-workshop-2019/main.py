@@ -39,6 +39,7 @@ import os.path
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from random import randrange
 import matplotlib.pyplot as plt
 import datetime as dt
 from zipfile import ZipFile, is_zipfile
@@ -151,24 +152,19 @@ n_ppl_freq_adj = n_ppl_freq_adj.astype(int)
 
 
 
-### Add column that sums each day choice
-# Multiply by choice_weights array, sum the columns, multiple by n_people
-choice_col_name: str = 'choice_bias'
-df[choice_col_name] = (df[choice_cols].multiply(choice_weights).sum(axis=1) * df['n_people'].map(n_ppl_freq_adj))
-df[choice_col_name] = round(df[choice_col_name].astype(np.float32), 2)
-# df.drop('choice_bias', axis=1, inplace=True)
-# df['choice_bias'].nunique()
+# ### Add column that sums each day choice
+# # Multiply by choice_weights array, sum the columns, multiple by n_people
+# choice_col_name = 'choice_bias'
+# df[choice_col_name] = (df[choice_cols].multiply(choice_weights).sum(axis=1) * df['n_people'].map(n_ppl_freq_adj))
+# df[choice_col_name] = round(df[choice_col_name].astype(np.float32), 2)
+# # df.drop('choice_bias', axis=1, inplace=True)
+# # df['choice_bias'].nunique()
 
-sort_cols = ['n_people']
-sort_cols.extend(choice_cols)
-sort_cols.extend([choice_col_name])
-sort_bool = [False if i.endswith(('people','bias',)) else True for i in sort_cols]
-df = df.sort_values(by=sort_cols, ascending = sort_bool)
-
-# df.iloc[:50,:].sort_values(by=['n_people','choice_bias'], ascending=[False, True],)
-
-
-### Sum
+# sort_cols = ['n_people']
+# sort_cols.extend(choice_cols)
+# sort_cols.extend([choice_col_name])
+# sort_bool = [False if i.endswith(('people',)) else True for i in sort_cols]
+# df = df.sort_values(by=sort_cols, ascending = sort_bool)
 
 
 ### Evaluation ###
@@ -230,15 +226,15 @@ dfp: pd.DataFrame = pd.DataFrame(
         )
 
 
-N_DAYS = 100
-MIN_OCCUPANCY = 125
-MAX_OCCUPANCY = 300
-DAY_RANGE: np.array = np.arange(1, N_DAYS + 1)
+N_DAYS = 100.
+MIN_OCCUPANCY = 125.
+MAX_OCCUPANCY = 300.
+DAY_RANGE = np.arange(1, N_DAYS + 1, dtype=np.float64)
 
 
 
 # n_people
-freq_index_cols: list = choice_cols.copy()
+freq_index_cols = choice_cols.copy()
 freq_index_cols.append('n_people')
 # df_stack = df[freq_index_cols].stack().reset_index().rename(columns={'level_0':'family_id',0:'days_back_ct','level_1':'choice'})
 # df_stack[['choice','days_back_ct']].groupby(['choice','days_back_ct']).size()
@@ -255,27 +251,335 @@ df5 = df4.merge(df3, how='left', left_on='level_0', right_on='family_id')
 df5 = df5.drop(['level_0', 'family_id'], axis=1)
 df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
 
-del df3
-
-
-
+# del df3
 
 
 ##################################
 ### Assignment Process ###
 
-n_people_lst = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
+n_people_list = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
+n_people_list = [float(i) for i in n_people_list]
 
-#-- Final dataframe to hold assigned day
-final_df = df['family_id']
-final_df = final_df.to_frame('family_id')
-final_df['assigned_day'] = 0
-final_df['n_people'] = 0
+####- Seeded DataFrame
+working_df = df[['family_id', 'n_people']]
+working_df['assigned_day'] = 0.
+
+
+
+
+# #-- Loop a range of days back to seed 'assigned_day' column
+# def gen_sequence(start, stop,):
+#     """
+#     Generator to loop through a range of values indefinitely.
+#     """
+#     while True:
+#         n = float(start)
+#         while n <= stop:
+#             yield n
+#             n += 1.
+
+
+
+
+# working_df = working_df.sort_values(by=['n_people','assigned_day'], ascending=[False, True]).reset_index(drop=True)
+# working_df.head(20)
+
+### Regrouping
+df3 = df.loc[:, ['family_id','n_people',]].copy()
+df6 = df4.merge(df3, how='left', left_on='level_0', right_on='family_id')
+df6 = df6.drop('family_id', axis=1)
+df6 = df6.rename(columns = {'level_0':'family_id','level_1':'choice', 0:'n_days',})
+df6['cost'] = 0.
+df6['choice_n'] = df6.loc[:,'choice'].str.split('_', expand=True)[1].astype(float)
+for i in df6.select_dtypes(include=['int','int32','int64']):
+    df6[i] = df6[i].astype(float)
+
+#-- Create working_df
+for idx in working_df.index:
+    day = randrange(0, 10)*1.0
+    tmp_df = df6[df6['family_id'] == str(idx)]
+    tmp_day = tmp_df.loc[tmp_df['choice_n'] == day, 'n_days'].values[0]
+    working_df.loc[idx, 'assigned_day'] = tmp_day
+
+
+df6 = df6.drop('choice_n', axis=1)
+
+for cc in choice_cols:
+    df6.loc[df6['choice'] == cc, 'cost'] = df6.loc[df6['choice'] == cc, :].apply(lambda x: dfp.loc[cc, 'gift_card'] \
+                   + (x['n_people'] * dfp.loc[cc, 'santas_buffet']) \
+                   + (x['n_people'] * dfp.loc[cc, 'copter_ride']), axis=1)
+
+cost_df = working_df.merge(df6, how='inner', left_on=['family_id','assigned_day',], right_on=['family_id', 'n_days',])
+cost_df = cost_df.drop(['n_days','n_people_y'], axis=1).rename(columns={'n_people_x':'n_people',})
+
+# df6[df6['family_id'] == '3519'].apply(lambda x:  x['n_days'] / x['cost'] if x['cost'] != 0.0 else 0.0, axis=1)
+df6['day_cost'] = df6.apply(lambda x:  x['n_days'] * x['cost'], axis=1)
+
+
+
+def acc_penalty_lhs(col):
+    """Left-hand side of accounting penalty equation."""
+    return np.divide((col - 125.), 400.)
+
+def acc_penalty_rhs(col):
+    """Right-hand side of accounting penalty equation."""
+    if col.shift().isna().any():
+        return np.power(col, (0.5 + np.divide(np.abs(col - col), 50.)))
+    else:
+        return np.power(col, (0.5 + np.divide(np.abs(col - col.shift()), 50.)))
+
+def acc_penalty(df_col):
+    """Agg function for accounting penalty."""
+    return acc_penalty_lhs(df_col) * acc_penalty_rhs(df_col)
+
+#-- Sort by index descending
+day_totals = cost_df[['assigned_day','cost',]].groupby('assigned_day').sum().astype(float)
+day_totals = day_totals.sort_index(ascending=False)
+
+#--Calculate current accounting penalty.
+accounting_penalty = round(day_totals.apply(lambda x: acc_penalty(x)).sum().values[0], 4)
+preference_cost = day_totals.sum()
+init_score = accounting_penalty + preference_cost
+
+def df_partitioner(dataframe, column_name, column_value):
+    return dataframe.loc[dataframe[column_name] == column_value, :]
+
+
+
+
+df6_day_cost_agg = df6[['family_id','day_cost']].groupby('family_id').sum().reset_index()
+df6_day_cost_agg = df6_day_cost_agg.rename(columns={'day_cost':'tot_day_cost'})
+df6 = df6.merge(df6_day_cost_agg, how='inner', left_on='family_id', right_on='family_id')
+df6.sort_values(by=['choice','n_days', 'n_people','cost','tot_day_cost',], ascending=[True, True, False, True, True,], inplace=True)
+df6 = df6.drop('day_cost', axis=1)
+# df6.head()
+
+
+########### Testing algo
+# #-- Current by day
+# cost_df[cost_df['assigned_day']==1]
+# cost_df[cost_df['assigned_day']==1]['n_people'].sum()
+working_df['n_people'] = working_df['n_people'] * 1.0
+n_people_list = np.array(sorted(working_df['n_people'].unique(), reverse=True))
+
+try:
+    working_df.drop('new_day', axis=1, inplace=True)
+except KeyError:
+    pass
+working_df['new_day'] = 0.0
+df_tst = df6.copy()
+
+# no_cost_df = df6.loc[df6['cost'] == 0.0, :]
+# no_cost_df.sort_values(by=['tot_day_cost',], ascending=[False,], inplace=True)
+# # no_cost_df.loc[:,['n_people','n_days',]].groupby('n_days').sum().astype(float)
+
+
+# working_df_2 = working_df.copy()
+# working_df_2.drop('assigned_day', axis=1, inplace=True)
+
+# no_cost_df = df6.loc[df6['cost'] == 0.0, :]
+# no_cost_df.sort_values(by=['tot_day_cost',], ascending=[False,], inplace=True)
+# # no_cost_df.loc[:,['n_people','n_days',]].groupby('n_days').sum().astype(float)
+
+
+# df_tst.loc[df_tst['family_id'] == '0', :]
+# day_totals = cost_df.loc[:, ['new_day','cost',]].groupby('new_day').sum().astype(float)
+
+
+# people_df = df_partitioner(df_tst, 'n_people', 8.0)
+# # people_df.sort_values(by=['n_days', 'choice','tot_day_cost',], ascending=[True, True, False,], inplace=True)
+
+# choice_df = df_partitioner(people_df, 'choice', 'choice_0')
+# choice_df.sort_values(by=['n_days', 'tot_day_cost',], ascending=[True,  False,], inplace=True)
+
+
+# family_ids = choice_df['family_id'].values
+# for fid in family_ids:
+#     f_day = choice_df.loc[choice_df['family_id'] == fid, 'n_days'].values[0]
+#     working_df_2.loc[working_df_2['family_id'] == fid, 'new_day'] = f_day
+#     df_tst.drop(df_tst.loc[df_tst['family_id'] == fid,].index, inplace=True)
+
+
+
+# choice_df = df_partitioner(df_tst, 'choice', 'choice_0')
+# choice_df.sort_values(by=['n_days', 'tot_day_cost',], ascending=[True,  False,], inplace=True)
+
+
+# people_df = df_partitioner(choice_df, 'n_people', 7.0)
+# people_df.sort_values(by=['n_days', 'choice','tot_day_cost',], ascending=[True, True, False,], inplace=True)
+
+
+# day_list = people_df.loc[:,'n_days'].unique()
+
+# for dd in day_list:
+#     #-- Current count of people for that day
+#     day_people_ct = working_df_2[working_df_2['new_day'] == dd]['n_people'].sum()
+
+#     #--  Running total of n_people starting from initial count
+#     people_df['people_day_cum_ct'] = people_df[people_df['n_days'] == dd]['n_people'].cumsum() + day_people_ct
+
+#     #-- Temp dataframe for cumulative totals lte MAX_OCCUPANCY
+#     tmp_df = people_df[people_df['people_day_cum_ct'] <= MAX_OCCUPANCY].copy()
+
+#     family_ids = tmp_df.loc[:,'family_id'].values
+#     for fid in family_ids:
+#         working_df_2.loc[working_df_2['family_id'] == fid, 'new_day'] = dd
+#         df_tst.drop(df_tst.loc[df_tst['family_id'] == fid,].index, inplace=True)
+
+
+
+
+working_df_2 = working_df.copy()
+working_df_2 = working_df_2.drop('assigned_day', axis=1)
+
+###-- Initial run --###
+for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
+    choice_df = df_partitioner(df_tst, 'choice', cc)
+    # choice_df.sort_values(by=['n_days', 'tot_day_cost',], ascending=[True,  False,], inplace=True)
+    # choice_df.sort_values(by=['cost', 'tot_day_cost'], ascending=[False, False], inplace=True)
+    choice_df.sort_values(by=['cost', 'tot_day_cost'], inplace=True)
+    # print(f"df_tst rows: {df_tst.shape[0]}")
+    for pp in n_people_list: # [8., 7., 6., 5., 4., 3., 2.]
+        people_df = df_partitioner(choice_df, 'n_people', pp)
+        # people_df.sort_values(by=['n_days', 'choice','tot_day_cost',], ascending=[True, True, False,], inplace=True)
+
+        day_list = people_df.loc[:,'n_days'].unique()
+        # for dd in DAY_RANGE:
+        for dd in day_list:
+            #-- Current count of people for that day
+            day_people_ct = working_df_2[working_df_2['new_day'] == dd]['n_people'].sum()
+        
+            #--  Running total of n_people starting from initial count
+            people_df['people_day_cum_ct'] = people_df[people_df['n_days'] == dd]['n_people'].cumsum() + day_people_ct
+        
+            #-- Temp dataframe for cumulative totals lte MAX_OCCUPANCY
+            tmp_df = people_df[people_df['people_day_cum_ct'] <= MAX_OCCUPANCY].copy()
+
+            if tmp_df.shape[0] > 0:
+                print(f"Choice: {cc}, n_people: {pp}, day: {dd}")
+                family_ids = tmp_df.loc[:,'family_id'].values
+                for fid in family_ids:
+                    working_df_2.loc[working_df_2['family_id'] == fid, 'new_day'] = dd
+                    df_tst.drop(df_tst.loc[df_tst['family_id'] == fid,].index, inplace=True)
+
+
+
+###-- Need to allocate unassigned families
+
+day_totals = working_df_2.loc[working_df_2['new_day'] > 0.0, ['new_day','n_people',]].groupby('new_day').sum().astype(float)
+family_ids = working_df_2.loc[working_df_2['new_day'] == 0., :]['family_id'].values
+unassigned_family_df = df6.loc[df6['family_id'].isin(family_ids)]
+
+# day_totals.head(20)
+
+day_totals['avail_occupancy'] = MAX_OCCUPANCY - day_totals['n_people']
+day_totals['below_min_occupancy'] = day_totals['n_people'] < MIN_OCCUPANCY
+
+
+# # below minimum
+# day_totals.loc[day_totals['below_min_occupancy']==True,:]
+
+unassigned_family_df.loc[unassigned_family_df['choice']=='choice_1',:]
+day_totals[day_totals.index == 59.]
+
+
+
+
+#-- Evaluate cost
+cost_df = working_df_2.merge(df6, how='inner', left_on=['family_id','new_day',], right_on=['family_id', 'n_days',])
+cost_df = cost_df.drop(['n_days','n_people_y'], axis=1).rename(columns={'n_people_x':'n_people',})
+
+#- People count
+cost_people_ct = cost_df.loc[:, ['new_day','n_people',]].groupby('new_day').sum().astype(float)
+
+#-- Costs per day
+day_totals = cost_df.loc[:, ['new_day','cost',]].groupby('new_day').sum().astype(float)
+day_totals = day_totals.sort_index(ascending=False)
+
+#--Calculate current accounting penalty.
+accounting_penalty = round(day_totals.apply(lambda x: acc_penalty(x)).sum().values[0], 4)
+preference_cost = day_totals.sum()
+base_score = accounting_penalty + preference_cost
+
+
+
+# below minimum
+below_min_df = day_totals.loc[day_totals['below_min_occupancy']==True,:].sort_index(ascending=False)
+
+
+
+
+
+
+cost_df[['assigned_day','n_people',]].groupby('assigned_day').sum()
+
+
+
+
+
+
+
+
+# #-- Final dataframe to hold assigned day
+# final_df = df['family_id']
+# final_df = final_df.to_frame('family_id')
+# final_df['assigned_day'] = 0
+# final_df['n_people'] = 0
+
+
+
+for pp in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
+    people_df = df_partitioner(df6, 'n_people', pp)
+
+    for dd in DAY_RANGE: # (1., 100.)
+        days_df = df_partitioner(people_df, 'n_days', dd)
+
+        for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
+            choices_df =  df_partitioner(days_df, 'choice', cc)
+            choices_df.index = choices_df['family_id'].values
+            choices_df = choices_df.drop('family_id', axis=1)
+            day_total = final_df[final_df['assigned_day'] == dd]['n_people'].sum().astype(float)
+            running_total = day_total
+            while running_total <= MAX_OCCUPANCY:
+                for fam in choices_df.index:
+                    final_df.loc[fam,'assigned_day'] = dd
+                    final_df.loc[fam,'n_people'] = choices_df.loc[fam, 'n_people']
+                    df6 = df6.drop(df6[df6['family_id'] == fam].index)
+                running_total += pp
+
+
+
+
+
+
+
+for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
+    for n in n_people_lst: # [8, 7, 6, 5, 4, 3, 2]
+        df_1 = df_[df_['n_people'] == n].copy()
+        df_1 = df_1.sort_values(by=[cc,'choice_bias'], ascending=[True, False])
+        # print(f"df_1 shape: {df_1.shape}\tn_people: {n}")
+        for d in DAY_RANGE: # (1, 100)
+            tst_df = df_1.loc[df_1[cc] == d, :].copy()
+            print(f"tst_df shape: {tst_df.shape}")
+            print(f"Column: {cc}\n\tDay: {d}\n\tn_people: {n}")
+            if tst_df.shape[0] > 0:
+                for i in tst_df.index:
+                    day_total = final_df[final_df['assigned_day'] == d]['n_people'].sum()
+                    # print(f"day total: {day_total}")
+                    if (day_total + n) <= MAX_OCCUPANCY:
+                        final_df.loc[i,'assigned_day'] = d
+                        final_df.loc[i,'n_people'] = tst_df.loc[i, 'n_people']
+                        df_ = df_.drop(i, inplace=False)
+
+
+
 
 
 df_ = df.copy()
-for i in df_.select_dtypes(include=['int32','int64']):
-    df_[i] = df_[i].astype(np.float32)
+for i in df_.select_dtypes(include=['int','int32','int64']):
+    df_[i] = df_[i].astype(float)
+
+
 
 
 
@@ -315,6 +619,17 @@ for cc in choice_cols: # choice_0, choice_1, choice_2, ... , choice_9
 #-- Check and update any unassigned families
 n_people_missing = df.loc[final_df.loc[final_df['assigned_day'] == 0, 'family_id'].astype(int)]['n_people']
 final_df.loc[final_df['assigned_day'] == 0, 'n_people'] = n_people_missing.loc[final_df[final_df['assigned_day'] == 0].index]
+
+
+
+### Accounting penalty
+
+
+
+
+
+
+
 
 
 
