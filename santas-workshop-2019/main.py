@@ -266,21 +266,6 @@ working_df['assigned_day'] = 0.
 
 
 
-
-# #-- Loop a range of days back to seed 'assigned_day' column
-# def gen_sequence(start, stop,):
-#     """
-#     Generator to loop through a range of values indefinitely.
-#     """
-#     while True:
-#         n = float(start)
-#         while n <= stop:
-#             yield n
-#             n += 1.
-
-
-
-
 # working_df = working_df.sort_values(by=['n_people','assigned_day'], ascending=[False, True]).reset_index(drop=True)
 # working_df.head(20)
 
@@ -545,6 +530,48 @@ dfx = (df['n_people']
 
 dfx['tot_people'] = dfx['groups'] * dfx['n_people']
 dfx['cumul_tot_people'] = dfx['tot_people'].cumsum()
+
+
+
+### Network diagram
+import networkx as nx
+
+G = nx.Graph()
+# list(DAY_RANGE)
+
+fin_df['weights'] = fin_df['n_days'] * fin_df['n_people']
+
+w_edges = [(fin_df.loc[r, 'choice'], fin_df.loc[r, 'family_id'], fin_df.loc[r, 'weights']) for r in fin_df.index]
+
+G.add_nodes_from(list(fin_df.loc[:, 'choice'].unique()))
+G.add_weighted_edges_from(w_edges)
+
+# # Edge data
+# G['choice_0']['0']
+
+pos = nx.spring_layout(G)
+# nodes
+nx.draw_networkx_nodes(G, pos)
+
+# edges
+nx.draw_networkx_edges(G, pos, width=1)
+
+# # labels
+# nx.draw_networkx_labels(G, pos, font_size=8, font_family='sans-serif')
+
+plt.axis('off')
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
 
 
 
