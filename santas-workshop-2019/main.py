@@ -87,25 +87,23 @@ class DataImporter:
             self.__project_folder = value
 
 
-    def get_zipfolder(self) -> str:
+    def get_zipfolder(self):
         """Search for zipfile in directory. Return full path."""
-        zp_fldr: str = [os.path.join(self.project_folder, i) for i \
+        zp_fldr = [os.path.join(self.project_folder, i) for i \
                         in listdir(self.project_folder) \
                         if str(i).endswith('zip')]
     
         if len(zp_fldr) > 1:
             print('Multiple zip files found.')
         else:
-            output: str = zp_fldr[0]
+            output = zp_fldr[0]
             if is_zipfile(output):
                 self.zipfile_path = output
             else:
                 print(f"Zipfile '{output}' not valid.")
 
 
-    def import_csv_to_df(self, csv_filename: str = 'family_data') -> pd.DataFrame:
-        filename: str
-        zf_list: list
+    def import_csv_to_df(self, csv_filename = 'family_data'):
 
         #-- Set `zipfile_path` class variable
         self.get_zipfolder()
@@ -121,11 +119,14 @@ class DataImporter:
                         return pd.read_csv(csvf)
 
 #-- Instantiate DataImporter and create dataframe
-df: pd.DataFrame
+
 dimp = DataImporter(proj_folder)
 df = dimp.import_csv_to_df()
+# dfs = dimp.import_csv_to_df('sample_submission') # Sample submission
 # df = df.drop('family_id', axis=1)
 df['family_id'] = df['family_id'].astype(str)
+
+
 
 # #-- Column not included in data set
 # additional_col: str = 'otherwise'
@@ -260,14 +261,17 @@ df5 = df5.rename(columns = {'level_1':'choice', 0:'n_days',})
 n_people_list = sorted(list(set(df['n_people'])), reverse=True) # [8, 7, 6, 5, 4, 3, 2]
 n_people_list = [float(i) for i in n_people_list]
 
-####- Seeded DataFrame
-working_df = df[['family_id', 'n_people']]
-working_df['assigned_day'] = 0.
+####- Working DataFrame from sample submission file.
+dfs = dimp.import_csv_to_df('sample_submission') # Sample submission
+dfs['family_id'] = dfs['family_id'].astype(str)
+# working_df = df[['family_id', 'n_people']]
+# working_df['assigned_day'] = 0.
+working_df = dfs.loc[:, ['family_id', 'assigned_day']].copy()
+working_df = working_df.merge(df.loc[:,['family_id','n_people',]], how='left', on='family_id')
+working_df.loc[:, ['assigned_day', 'n_people']] = working_df.loc[:, ['assigned_day', 'n_people']].astype(float)
 
 
 
-# working_df = working_df.sort_values(by=['n_people','assigned_day'], ascending=[False, True]).reset_index(drop=True)
-# working_df.head(20)
 
 ### Regrouping
 df3 = df.loc[:, ['family_id','n_people',]].copy()
@@ -279,12 +283,12 @@ df6['choice_n'] = df6.loc[:,'choice'].str.split('_', expand=True)[1].astype(floa
 for i in df6.select_dtypes(include=['int','int32','int64']):
     df6[i] = df6[i].astype(float)
 
-#-- Create working_df
-for idx in working_df.index:
-    day = randrange(0, 10)*1.0
-    tmp_df = df6[df6['family_id'] == str(idx)]
-    tmp_day = tmp_df.loc[tmp_df['choice_n'] == day, 'n_days'].values[0]
-    working_df.loc[idx, 'assigned_day'] = tmp_day
+# #-- Create working_df
+# for idx in working_df.index:
+#     day = randrange(0, 10)*1.0
+#     tmp_df = df6[df6['family_id'] == str(idx)]
+#     tmp_day = tmp_df.loc[tmp_df['choice_n'] == day, 'n_days'].values[0]
+#     working_df.loc[idx, 'assigned_day'] = tmp_day
 
 
 df6 = df6.drop('choice_n', axis=1)
@@ -336,7 +340,8 @@ df6_day_cost_agg = df6[['family_id','day_cost']].groupby('family_id').sum().rese
 df6_day_cost_agg = df6_day_cost_agg.rename(columns={'day_cost':'tot_day_cost'})
 df6 = df6.merge(df6_day_cost_agg, how='inner', left_on='family_id', right_on='family_id')
 df6.sort_values(by=['choice','n_days', 'n_people','cost','tot_day_cost',], ascending=[True, True, False, True, True,], inplace=True)
-df6 = df6.drop('day_cost', axis=1)
+df6.sort_values(by=['tot_day_cost', 'choice'], ascending=[True, True], inplace=True)
+# df6 = df6.drop('day_cost', axis=1)
 # df6.head()
 
 
