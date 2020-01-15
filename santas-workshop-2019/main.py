@@ -36,6 +36,7 @@ else:
 chdir(proj_folder)
 
 import os.path
+import cvxpy as cp
 import numpy as np
 import pandas as pd
 import seaborn as sns
