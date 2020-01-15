@@ -135,21 +135,21 @@ df['family_id'] = df['family_id'].astype(str)
 # #-- Add additional column with default value of zero
 # df.insert(df.shape[1]-1, additional_col, np.float32(0))
 
-choice_cols: list = [i for i in df.columns.values if 'choice' in i]
-n_choice_cols: np.array = np.arange(len(choice_cols), dtype=np.int8)
+choice_cols = [i for i in df.columns.values if 'choice' in i]
+n_choice_cols = np.arange(len(choice_cols), dtype=np.int8)
 def weights_misc():
     ulam_seq = [1, 2, 3, 4, 6, 8, 11, 13, 16, 18]
     # choice_weights: np.array = np.arange(1, len(choice_cols) + 1, dtype=np.int8)[::-1]
     choice_weights: np.array = np.array(ulam_seq, dtype=np.int16)[::-1]
     col_count_seq: np.array = np.array([i for i in range(1, len(choice_cols) + 1)], dtype=np.uint8)
 
-col_count_seq: np.array = np.array([i for i in range(1, len(choice_cols) + 1)], dtype=np.uint16)
-col_count_inv: np.array = col_count_seq[::-1]
-choice_weights: np.array = np.array([40, 25, 16, 11, 7, 4, 2, 1, 1, 1,])
+col_count_seq = np.array([i for i in range(1, len(choice_cols) + 1)], dtype=np.uint16)
+col_count_inv = col_count_seq[::-1]
+choice_weights = np.array([40, 25, 16, 11, 7, 4, 2, 1, 1, 1,])
 # np.diff(choice_weights[::-1])
 
 #-- Adjusted n_people counts
-n_ppl_freq_adj: pd.Series = (1 / df['n_people'].value_counts()) * 2000
+n_ppl_freq_adj = (1 / df['n_people'].value_counts()) * 2000
 n_ppl_freq_adj = n_ppl_freq_adj.astype(int)
 
 
