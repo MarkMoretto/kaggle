@@ -26,7 +26,7 @@ Notes:
 
 ### Change folder to project directory
 
-home = True
+home = False
 from os import chdir, listdir
 if home:
     proj_folder = r'C:\Users\Work1\Desktop\Info\kaggle\santas-workshop-2019'
