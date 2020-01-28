@@ -19,7 +19,7 @@ By the end of this case study , you would be able to answer below questions:
 3. How the marketing strategy works in real world
 """
 
-home = True
+home = False
 
 
 import os
@@ -46,9 +46,14 @@ plt.style.use('fivethirtyeight')
 np.random.seed(13)
 
 
-project_folder = r"C:\Users\Work1\Desktop\Info\kaggle\mall-traffic-clustering"
+home_folder = r"C:\Users\Work1\Desktop\Info\kaggle\mall-traffic-clustering"
+work_folder = r"C:\Users\MMorett1\Desktop\Projects Main\kaggle\mall-traffic-clustering"
 if home:
-    os.chdir(project_folder)
+    project_folder = home_folder
+else:
+    project_folder = work_folder
+
+os.chdir(project_folder)
 
 csv_path = [f"{os.getcwd()}\{i}" for i in os.listdir(os.getcwd()) if i.endswith('csv')][0]
 
@@ -66,8 +71,12 @@ df1 = df.drop('CustomerID', axis=1,)
 
 ## XKCD colors
 xkcd_txt_path = r"https://xkcd.com/color/rgb.txt"
-with ureq.urlopen(xkcd_txt_path) as urlf:
-    raw_data = urlf.read().decode('utf-8')
+try:
+    with ureq.urlopen(xkcd_txt_path) as urlf:
+        raw_data = urlf.read().decode('utf-8')
+except ureq.URLError:
+    with open(f"{project_folder}\\xkcd-colors.txt") as f:
+        raw_data = f.read()
 
 # with open(f"{os.getcwd()}\\xkcd-colors.txt", 'w') as wf:
 #     wf.write(raw_data)
@@ -82,10 +91,11 @@ rand_color_list = [hex_df.loc[np.random.randint(0, hex_df.shape[0]),'color_name'
 
 #-- Closer look at Gender metrics.
 
-colors = ('#1f77b4','#ff7f0e',) # Lightish blue and orange
+# colors = ('#1f77b4','#ff7f0e',) # Lightish blue and orange
 
 
 def plot_gender_andrews_curve():
+    colors = ('#1f77b4','#ff7f0e',)
     plt.rcParams['figure.figsize'] = (12, 8)
     andrews_curves(df.drop('CustomerID', axis=1), "Gender", color=colors)
     plt.title('Andrew Curves for Gender', fontsize = 20)
@@ -93,7 +103,7 @@ def plot_gender_andrews_curve():
 
 def plot_gender_parallel_coordinates():
     colors = ('#1f77b4','#ff7f0e',) # Lightish blue and orange
-    fig = plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(12, 8))
     parallel_coordinates(
             df.drop('CustomerID', axis=1)
             .sort_values(by=['Gender', 'Annual_Income'], ascending=[True, False]),
@@ -111,7 +121,7 @@ def plot_corr_matrix():
     # with sns.color_palette(flatui):
     sns.set_palette(sns.xkcd_palette(rand_color_list))
     
-    fig = plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(12, 8))
     # ax1 =sns.heatmap(df.corr(), cmap = 'cubehelix', annot = True)
     ax1 =sns.heatmap(df.corr(), annot = True)
     bottom, top = ax1.get_ylim()
@@ -122,7 +132,7 @@ def plot_corr_matrix():
     plt.tight_layout()
     plt.show()
 
-
+# plot_corr_matrix()
 
 
 
@@ -195,6 +205,7 @@ for factory, init, params in km_cases:
                 res_dict[idx]['n_init'] = n_init
                 res_dict[idx]['cluster'] = cluster
                 res_dict[idx]['tolerance'] = round(t, 4)
+                res_dict[idx]['rand_state'] = idx
                 km_clu = factory(n_clusters = cluster,
                                  init = init,
                                  tol = round(t, 6),
@@ -227,16 +238,20 @@ initializer_ = best_result.loc[1, 'value']
 n_init_ = best_result.loc[2, 'value']
 n_cluster_ = best_result.loc[3, 'value']
 tol_ = best_result.loc[4, 'value']
+rnd_state_ = best_result.loc[5, 'value']
 
 
-eval_str = f"{factory_}(n_clusters={n_cluster_}, init='{initializer_}', tol={tol_}, n_init={n_init_}, **mbk_params)"
+
+eval_str = f"{factory_}(n_clusters={n_cluster_}, init='{initializer_}', "
+eval_str += f"tol={tol_}, n_init={n_init_}, random_state = {rnd_state_}, "
+eval_str += f"**mbk_params)"
 km_clu = eval(eval_str)
 
 # km_clu = KMeans(n_clusters = best_n_cluster, tol = best_tol)
 # km_mod = km_clu.fit_predict(X)
 km_mod = km_clu.fit(X)
 
-km_values = km_mod.cluster_centers_.squeeze()
+km_values = km_mod.cluster_centers_
 km_labels = km_mod.labels_
 
 # km_mod.score(X)
