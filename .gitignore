@@ -1,0 +1,17 @@
+# Python
+*py[cd]
+__pycache__/
+build/
+[v]env/
+
+
+# Node/NPM/Yarn
+node_modules/
+
+# Misc files and extensions
+dev*.*
+*BACKUP.csv
+
+
+# Microsoft
+.vscode/
